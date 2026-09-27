@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="BudgetMate">
+    <meta name="theme-color" content="#6366f1">
+    
+    <title>BudgetMate</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+
+        <!-- ====== VIEW: Dashboard ====== -->
+        <section id="view-dashboard" class="view active">
+            <header>
+                <h1 class="large-title">BudgetMate 💰</h1>
+            </header>
+
+            <!-- Setup prompt -->
+            <div id="setup-prompt" class="card setup-card" style="display:none;">
+                <p class="setup-emoji">👋</p>
+                <h3>Bienvenue sur BudgetMate !</h3>
+                <p>Configure ton budget mensuel dans les réglages pour commencer.</p>
+                <button class="btn-accent" onclick="App.navigate('settings')">Configurer</button>
+            </div>
+
+            <!-- Budget card -->
+            <div class="card budget-card">
+                <div class="budget-info">
+                    <span class="label">Budget dispo (hors épargne)</span>
+                    <span class="amount" id="dashboard-budget">0,00 €</span>
+                </div>
+                <div class="progress-ring">
+                    <svg viewBox="0 0 120 120">
+                        <circle class="progress-ring-bg" cx="60" cy="60" r="50" />
+                        <circle class="progress-ring-fill" id="progress-circle" cx="60" cy="60" r="50" />
+                    </svg>
+                    <div class="progress-ring-text">
+                        <span id="spent-percentage">0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Spent / Remaining row -->
+            <div class="stats-row">
+                <div class="card mini-card">
+                    <span class="label">Dépensé</span>
+                    <span class="value danger" id="dashboard-spent">0,00 €</span>
+                </div>
+                <div class="card mini-card">
+                    <span class="label">Restant</span>
+                    <span class="value success" id="dashboard-remaining">0,00 €</span>
+                </div>
+            </div>
+
+            <!-- Daily budget card -->
+            <div class="card daily-card">
+                <span class="label">💡 Budget quotidien restant</span>
+                <span class="amount" id="dashboard-daily">0,00 € / jour</span>
+                <span class="sub" id="dashboard-days">0 jours restants</span>
+            </div>
+
+            <!-- Status message -->
+            <div class="status-message" id="dashboard-message"></div>
+
+            <!-- Recent expenses -->
+            <div class="section-header header-row">
+                <h2 class="section-title" style="padding:0;">Dépenses récentes</h2>
+                <button class="btn-text" onclick="App.navigate('history')">Voir tout</button>
+            </div>
+            <div class="expense-list" id="recent-expenses-list">
+                <div class="empty-state">Aucune dépense pour le moment.</div>
+            </div>
+
+            <!-- FAB -->
+            <button class="fab" id="fab-add-expense" aria-label="Ajouter une dépense">+</button>
+        </section>
+
+        <!-- ====== VIEW: Add Expense ====== -->
+        <section id="view-add" class="view">
+            <header>
+                <h1 class="large-title">Nouvelle dépense</h1>
+            </header>
+
+            <!-- Amount display -->
+            <div class="amount-display">
+                <span class="amount-value" id="amount-display">0</span>
+                <span class="amount-currency">€</span>
+            </div>
+
+            <!-- Category grid -->
+            <h2 class="section-title">Catégorie</h2>
+            <div class="category-grid" id="category-grid"></div>
+
+            <!-- Note & Date -->
+            <div class="form-section">
+                <div class="input-group">
+                    <label for="expense-note">Note (optionnel)</label>
+                    <input type="text" id="expense-note" placeholder="Ex: McDo avec les potes">
+                </div>
+                <div class="input-group">
+                    <label for="expense-date">Date</label>
+                    <input type="date" id="expense-date">
+                </div>
+            </div>
+
+            <!-- Keypad -->
+            <div class="keypad" id="custom-keypad">
+                <button class="key-btn" data-key="1">1</button>
+                <button class="key-btn" data-key="2">2</button>
+                <button class="key-btn" data-key="3">3</button>
+                <button class="key-btn" data-key="4">4</button>
+                <button class="key-btn" data-key="5">5</button>
+                <button class="key-btn" data-key="6">6</button>
+                <button class="key-btn" data-key="7">7</button>
+                <button class="key-btn" data-key="8">8</button>
+                <button class="key-btn" data-key="9">9</button>
+                <button class="key-btn" data-key=".">,</button>
+                <button class="key-btn" data-key="0">0</button>
+                <button class="key-btn action-btn" data-key="backspace">⌫</button>
+            </div>
+
+            <!-- Submit -->
+            <div class="form-actions">
+                <button class="btn-accent btn-full" id="save-expense">Ajouter la dépense</button>
+            </div>
+        </section>
+
+        <!-- ====== VIEW: History ====== -->
+        <section id="view-history" class="view">
+            <header>
+                <div class="header-row">
+                    <h1 class="large-title">Historique 🔍</h1>
+                    <button class="btn-icon" onclick="App.navigate('dashboard')">✕</button>
+                </div>
+            </header>
+            
+            <div class="form-section" style="margin-top: 10px;">
+                <div class="search-bar">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="history-search" placeholder="Chercher une dépense...">
+                </div>
+                
+                <div class="period-tabs">
+                    <button class="period-tab active" data-offset="0">Ce mois</button>
+                    <button class="period-tab" data-offset="-1">Mois -1</button>
+                    <button class="period-tab" data-offset="-2">Mois -2</button>
+                </div>
+            </div>
+
+            <div class="expense-list" id="history-expenses-list" style="margin-top: 16px;">
+                <div class="empty-state">Aucune dépense trouvée.</div>
+            </div>
+        </section>
+
+        <!-- ====== VIEW: Statistics ====== -->
+        <section id="view-stats" class="view">
+            <header>
+                <div class="header-row">
+                    <h1 class="large-title">Statistiques 📊</h1>
+                    <select id="period-selector" class="period-select">
+                        <option value="current">Ce mois</option>
+                        <option value="previous">Mois précédent</option>
+                    </select>
+                </div>
+            </header>
+
+            <!-- Summary cards -->
+            <div class="stats-row">
+                <div class="card mini-card">
+                    <span class="label">Total dépensé</span>
+                    <span class="value" id="stats-total">0,00 €</span>
+                </div>
+                <div class="card mini-card">
+                    <span class="label">Moyenne / jour</span>
+                    <span class="value" id="stats-daily-avg">0,00 €</span>
+                </div>
+            </div>
+            
+            <!-- Trends -->
+            <div class="card" id="trends-card" style="display:none;">
+                <h3 class="card-title">📈 Tendances vs Mois Dernier</h3>
+                <div id="trends-list"></div>
+            </div>
+
+            <!-- Donut chart -->
+            <div class="card">
+                <h3 class="card-title">Répartition par catégorie</h3>
+                <div class="chart-wrapper">
+                    <canvas id="stats-donut"></canvas>
+                </div>
+            </div>
+
+            <!-- Bar chart -->
+            <div class="card">
+                <h3 class="card-title">Dépenses par semaine</h3>
+                <div class="chart-wrapper">
+                    <canvas id="stats-bars"></canvas>
+                </div>
+            </div>
+
+            <!-- Category breakdown list -->
+            <h2 class="section-title">Détails par catégorie</h2>
+            <div class="category-breakdown" id="stats-category-list"></div>
+
+            <!-- Biggest expense -->
+            <div class="card biggest-expense" id="biggest-expense-card" style="display:none;">
+                <h3 class="card-title">🏆 Plus grosse dépense</h3>
+                <div class="expense-item">
+                    <div class="expense-icon" id="biggest-emoji">💸</div>
+                    <div class="expense-details">
+                        <div class="expense-title" id="biggest-title">-</div>
+                        <div class="expense-time" id="biggest-date">-</div>
+                    </div>
+                    <div class="expense-amount" id="biggest-amount">0,00 €</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ====== VIEW: Settings ====== -->
+        <section id="view-settings" class="view">
+            <header>
+                <h1 class="large-title">Réglages ⚙️</h1>
+            </header>
+
+            <div class="settings-group">
+                <h3 class="settings-group-title">Budget & Épargne</h3>
+                <div class="settings-item">
+                    <span class="settings-label">Budget mensuel total</span>
+                    <input type="number" id="settings-budget" min="0" step="1" inputmode="numeric" placeholder="500">
+                </div>
+                <div class="settings-item">
+                    <span class="settings-label">Objectif d'épargne 🎯</span>
+                    <input type="number" id="settings-savings" min="0" step="1" inputmode="numeric" placeholder="50">
+                </div>
+                <div class="settings-item">
+                    <span class="settings-label">Jour de renouvellement</span>
+                    <select id="settings-renew"></select>
+                </div>
+            </div>
+            
+            <div class="settings-group">
+                <h3 class="settings-group-title">Dépenses récurrentes (Auto)</h3>
+                <div id="recurring-list"></div>
+                <div class="settings-item clickable" id="btn-add-recurring" style="justify-content: center; color: var(--accent); font-weight: 500;">
+                    + Ajouter un abonnement
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <h3 class="settings-group-title">Apparence</h3>
+                <div class="settings-item">
+                    <span class="settings-label">Thème</span>
+                    <select id="settings-theme">
+                        <option value="auto">Automatique</option>
+                        <option value="light">Clair</option>
+                        <option value="dark">Sombre</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <h3 class="settings-group-title">Données</h3>
+                <div class="settings-item clickable" id="export-data">
+                    <span class="settings-label">📤 Exporter (JSON)</span>
+                    <span class="chevron">›</span>
+                </div>
+                <div class="settings-item clickable" id="import-trigger">
+                    <span class="settings-label">📥 Importer</span>
+                    <span class="chevron">›</span>
+                </div>
+                <input type="file" id="import-file" accept=".json" style="display:none;">
+                <div class="settings-item clickable danger-item" id="clear-data">
+                    <span class="settings-label">🗑️ Réinitialiser toutes les données</span>
+                    <span class="chevron">›</span>
+                </div>
+            </div>
+
+            <div class="app-footer">
+                <p>BudgetMate v2.0</p>
+                <p>Fait avec 💙 pour les étudiants</p>
+            </div>
+        </section>
+
+    </div><!-- /.app-container -->
+
+    <!-- Modal for adding recurring expenses -->
+    <div id="modal-recurring" class="confirm-overlay">
+        <div class="confirm-dialog" style="padding-bottom: 0;">
+            <div class="confirm-header">
+                <h3>Nouvel abonnement</h3>
+                <p>Il sera ajouté automatiquement au début de chaque mois.</p>
+            </div>
+            <div class="form-section" style="padding: 0 20px 20px;">
+                <div class="input-group">
+                    <label>Titre (ex: Netflix)</label>
+                    <input type="text" id="rec-note" placeholder="Netflix">
+                </div>
+                <div class="input-group">
+                    <label>Montant (€)</label>
+                    <input type="number" id="rec-amount" placeholder="8.99" step="0.01">
+                </div>
+                <div class="input-group">
+                    <label>Catégorie</label>
+                    <select id="rec-category" style="width:100%; background:var(--bg-card-hover); padding:12px; border-radius:12px;"></select>
+                </div>
+            </div>
+            <div class="confirm-actions">
+                <button class="confirm-cancel" id="rec-cancel">Annuler</button>
+                <button class="confirm-ok" id="rec-save" style="color:var(--accent);">Ajouter</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Tab Bar -->
+    <nav class="tab-bar">
+        <button class="tab-item active" data-target="dashboard">
+            <span class="tab-icon">🏠</span>
+            <span class="tab-label">Accueil</span>
+        </button>
+        <button class="tab-item" data-target="add">
+            <span class="tab-icon">➕</span>
+            <span class="tab-label">Dépense</span>
+        </button>
+        <button class="tab-item" data-target="stats">
+            <span class="tab-icon">📊</span>
+            <span class="tab-label">Stats</span>
+        </button>
+        <button class="tab-item" data-target="settings">
+            <span class="tab-icon">⚙️</span>
+            <span class="tab-label">Réglages</span>
+        </button>
+    </nav>
+
+    <script src="js/storage.js"></script>
+    <script src="js/budget.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(() => {});
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>BudgetMate Tests</title></head>
+<body>
+<script src="../js/storage.js"></script>
+<script src="../js/budget.js"></script>
+<script src="../js/charts.js"></script>
+<script>
+// Minimal test runner
+let passed = 0, failed = 0;
+function test(name, fn) {
+  try { fn(); passed++; console.log('✅ ' + name); }
+  catch(e) { failed++; console.error('❌ ' + name + ': ' + e.message); }
+}
+function assert(cond, msg) { if (!cond) throw new Error(msg || 'Assertion failed'); }
+
+// Clean state
+localStorage.clear();
+
+// --- Storage Tests ---
+test('Storage: default settings', () => {
+  const s = Storage.getSettings();
+  assert(s.budget === 0, 'budget should be 0');
+  assert(s.renewDay === 1, 'renewDay should be 1');
+});
+
+test('Storage: save and get settings', () => {
+  Storage.saveSettings({ budget: 500, renewDay: 5 });
+  const s = Storage.getSettings();
+  assert(s.budget === 500);
+  assert(s.renewDay === 5);
+});
+
+test('Storage: empty expenses by default', () => {
+  assert(Storage.getExpenses().length === 0);
+});
+
+test('Storage: add expense', () => {
+  const e = Storage.addExpense({ amount: 12.50, category: 'food', date: '2026-09-20', note: 'Pizza' });
+  assert(e.id, 'should have an id');
+  assert(e.amount === 12.50);
+  assert(e.category === 'food');
+  assert(e.createdAt > 0);
+  assert(Storage.getExpenses().length === 1);
+});
+
+test('Storage: add multiple expenses', () => {
+  Storage.addExpense({ amount: 3.00, category: 'transport', date: '2026-09-21', note: 'Bus' });
+  Storage.addExpense({ amount: 25.00, category: 'fun', date: '2026-09-22', note: 'Cinema' });
+  assert(Storage.getExpenses().length === 3);
+});
+
+test('Storage: delete expense', () => {
+  const expenses = Storage.getExpenses();
+  const idToDelete = expenses[0].id;
+  Storage.deleteExpense(idToDelete);
+  assert(Storage.getExpenses().length === 2);
+  assert(!Storage.getExpenses().find(e => e.id === idToDelete));
+});
+
+test('Storage: theme default is auto', () => {
+  assert(Storage.getTheme() === 'auto');
+});
+
+test('Storage: set and get theme', () => {
+  Storage.setTheme('dark');
+  assert(Storage.getTheme() === 'dark');
+  Storage.setTheme('auto');
+});
+
+test('Storage: export data', () => {
+  const json = Storage.exportData();
+  const data = JSON.parse(json);
+  assert(data.settings, 'should have settings');
+  assert(Array.isArray(data.expenses), 'should have expenses array');
+  assert(data.exportDate, 'should have exportDate');
+});
+
+test('Storage: import data', () => {
+  const backup = Storage.exportData();
+  Storage.clearAll();
+  assert(Storage.getExpenses().length === 0);
+  const success = Storage.importData(backup);
+  assert(success === true);
+  assert(Storage.getExpenses().length === 2);
+});
+
+test('Storage: import invalid data', () => {
+  assert(Storage.importData('not json') === false);
+  assert(Storage.importData('{"invalid": true}') === true); // valid JSON, just no expenses
+});
+
+test('Storage: generate id', () => {
+  const id1 = Storage._generateId();
+  const id2 = Storage._generateId();
+  assert(id1 !== id2, 'IDs should be unique');
+  assert(id1.length > 10, 'ID should be a UUID-like string');
+});
+
+test('Storage: clear all', () => {
+  Storage.clearAll();
+  assert(Storage.getExpenses().length === 0);
+  assert(Storage.getSettings().budget === 0);
+});
+
+// --- Budget Tests ---
+// Setup for budget tests
+Storage.saveSettings({ budget: 500, renewDay: 1 });
+const today = new Date().toISOString().split('T')[0];
+Storage.addExpense({ amount: 50, category: 'food', date: today, note: 'test1' });
+Storage.addExpense({ amount: 30, category: 'transport', date: today, note: 'test2' });
+Storage.addExpense({ amount: 20, category: 'food', date: today, note: 'test3' });
+
+test('Budget: getCurrentPeriod', () => {
+  const p = Budget.getCurrentPeriod();
+  assert(p.start instanceof Date);
+  assert(p.end instanceof Date);
+  assert(p.daysTotal > 0, 'daysTotal should be positive');
+  assert(p.daysLeft >= 0, 'daysLeft should be >= 0');
+  assert(p.daysPassed >= 1, 'daysPassed should be >= 1');
+  assert(p.daysTotal === p.daysLeft + p.daysPassed, 'daysTotal should = daysLeft + daysPassed');
+});
+
+test('Budget: getCurrentExpenses', () => {
+  const expenses = Budget.getCurrentExpenses();
+  assert(expenses.length === 3, 'should have 3 expenses in current period');
+});
+
+test('Budget: getSummary', () => {
+  const expenses = Budget.getCurrentExpenses();
+  const summary = Budget.getSummary(expenses, Storage.getSettings());
+  assert(summary.totalSpent === 100, 'total should be 100');
+  assert(summary.effectiveBudget === 500, 'effective budget should be 500');
+  assert(summary.remaining === 400, 'remaining should be 400');
+  assert(summary.percentSpent === 20, 'percent should be 20');
+  assert(summary.dailyBudget > 0, 'daily budget should be > 0');
+  assert(summary.expenseCount === 3);
+  assert(summary.biggestExpense.amount === 50, 'biggest should be 50');
+});
+
+test('Budget: getSummary with savings goal', () => {
+  Storage.saveSettings({ budget: 500, renewDay: 1, savingsGoal: 100 });
+  const expenses = Budget.getCurrentExpenses();
+  const summary = Budget.getSummary(expenses, Storage.getSettings());
+  assert(summary.effectiveBudget === 400, 'effective budget should be 400 (500 - 100)');
+  assert(summary.remaining === 300, 'remaining should be 300 (400 - 100 spent)');
+  assert(summary.percentSpent === 25, 'percent should be 25 (100 / 400)');
+  Storage.saveSettings({ budget: 500, renewDay: 1, savingsGoal: 0 }); // reset
+});
+
+test('Budget: getSummary with 0 budget', () => {
+  const summary = Budget.getSummary([], {budget: 0, savingsGoal: 0});
+  assert(summary.totalSpent === 0);
+  assert(summary.remaining === 0);
+  assert(summary.percentSpent === 0);
+});
+
+test('Budget: getCategoryBreakdown', () => {
+  const expenses = Budget.getCurrentExpenses();
+  const breakdown = Budget.getCategoryBreakdown(expenses);
+  assert(breakdown.length === 2, 'should have 2 categories (food, transport)');
+  assert(breakdown[0].category === 'Nourriture', 'first should be Nourriture (highest)');
+  assert(breakdown[0].total === 70, 'food total should be 70');
+  assert(breakdown[1].total === 30, 'transport total should be 30');
+  assert(Math.round(breakdown[0].percentage) === 70);
+});
+
+test('Budget: getWeeklyBreakdown', () => {
+  const period = Budget.getCurrentPeriod();
+  const expenses = Budget.getCurrentExpenses();
+  const weeks = Budget.getWeeklyBreakdown(expenses, period.start);
+  assert(weeks.length >= 1, 'should have at least 1 week');
+  const totalInWeeks = weeks.reduce((sum, w) => sum + w.total, 0);
+  assert(totalInWeeks === 100, 'weekly total should match expense total');
+});
+
+test('Budget: getStatusColor', () => {
+  assert(Budget.getStatusColor(20) === 'success');
+  assert(Budget.getStatusColor(49) === 'success');
+  assert(Budget.getStatusColor(50) === 'warning');
+  assert(Budget.getStatusColor(80) === 'warning');
+  assert(Budget.getStatusColor(81) === 'danger');
+  assert(Budget.getStatusColor(100) === 'danger');
+});
+
+test('Budget: getStatusMessage', () => {
+  const msg1 = Budget.getStatusMessage(20, 400, 10);
+  assert(msg1.includes('💪'), 'low spend should be encouraging');
+  const msg2 = Budget.getStatusMessage(90, 50, 3);
+  assert(msg2.includes('⚠️'), 'high spend should warn');
+  const msg3 = Budget.getStatusMessage(100, 0, 5);
+  assert(msg3.includes('🚨'), 'over budget should alert');
+});
+
+test('Budget: CATEGORIES has 9 entries', () => {
+  assert(Budget.CATEGORIES.length === 9);
+  Budget.CATEGORIES.forEach(c => {
+    assert(c.id, 'each cat should have id');
+    assert(c.emoji, 'each cat should have emoji');
+    assert(c.label, 'each cat should have label');
+  });
+});
+
+test('Charts: COLORS has 9 entries', () => {
+  assert(Charts.COLORS.length === 9);
+});
+
+// Cleanup
+localStorage.clear();
+
+// Results
+console.log(`\n=== Results: ${passed} passed, ${failed} failed ===`);
+document.title = `Tests: ${passed}✅ ${failed}❌`;
+document.body.innerHTML = `<pre style="font-size:18px;padding:20px;">=== BudgetMate Tests ===\n${passed} passed ✅\n${failed} failed ❌</pre>`;
+</script>
+</body>
+</html>
